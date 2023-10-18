@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake Visualization</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; width: 100%; }
+        .info.legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Create map and set a global view
+        let map = L.map('map').setView([20, 0], 2);
+
+        // Add tile layers
+        let openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let satelliteMap = L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoiamJ3aWxsaWFtczMiLCJhIjoiY2xudjhndHY3MDNwdzJrbzg3eGp6amtscSJ9.GV7gpxNuoyR5so8d7d8ljQ', {
+            maxZoom: 19
+        });
+
+        let baseMaps = {
+            "OpenStreetMap": openStreetMap,
+            "Satellite Map": satelliteMap
+        };
+
+        let earthquakes = L.layerGroup().addTo(map);
+        let tectonicPlates = L.layerGroup().addTo(map);
+
+        // Fetch earthquake data
+        fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson')
+            .then(response => response.json())
+            .then(data => {
+                data.features.forEach(feature => {
+                    let coords = feature.geometry.coordinates;
+                    let magnitude = feature.properties.mag;
+                    let depth = coords[2];
+                    let color = getColor(depth);
+
+                    L.circle([coords[1], coords[0]], {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.8,
+                        radius: magnitude * 20000
+                    })
+                    .addTo(earthquakes)
+                    .bindPopup(`<strong>Magnitude:</strong> ${magnitude}<br><strong>Depth:</strong> ${depth}<br><strong>Place:</strong> ${feature.properties.place}`);
+                });
+            });
+
+        // Fetch tectonic plate data
+        fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: {
+                        color: "orange",
+                        weight: 2
+                    }
+                }).addTo(tectonicPlates);
+            });
+
+        let overlayMaps = {
+            "Earthquakes": earthquakes,
+            "Tectonic Plates": tectonicPlates
+        };
+
+        L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+        // Define color based on depth
+        function getColor(depth) {
+            if (depth <= 10) return "#FFE082";
+            else if (depth <= 30) return "#FFD54F";
+            else if (depth <= 50) return "#FFCA28";
+            else if (depth <= 70) return "#FFC107";
+            else if (depth <= 90) return "#FFB300";
+            else return "#FFA000";
+        }
+
+        // Add legend
+        let legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function(map) {
+            let div = L.DomUtil.create('div', 'info legend'),
+                grades = [0, 10, 30, 50, 70, 90],
+                labels = [];
+
+            div.innerHTML = '<strong>Depth (km)</strong><br>';
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+            }
+
+            return div;
+        };
+        legend.addTo(map);
+
+    </script>
+</body>
+</html>
